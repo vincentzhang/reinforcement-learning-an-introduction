@@ -255,4 +255,4 @@ def figure_6_6():
 
 if __name__ == '__main__':
     figure_6_4()
-    figure_6_6()
+    #figure_6_6()
