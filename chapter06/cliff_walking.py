@@ -168,7 +168,7 @@ def figure_6_4():
     # episodes of each run
     episodes = 500
 
-    # perform 40 independent runs
+    # perform 50 independent runs
     runs = 50
 
     rewards_sarsa = np.zeros(episodes)
@@ -183,7 +183,7 @@ def figure_6_4():
             rewards_sarsa[i] += sarsa(q_sarsa)
             rewards_q_learning[i] += q_learning(q_q_learning)
 
-    # averaging over independt runs
+    # averaging over independent runs
     rewards_sarsa /= runs
     rewards_q_learning /= runs
 

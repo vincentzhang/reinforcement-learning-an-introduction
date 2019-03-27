@@ -215,7 +215,7 @@ class ReinforceBaselineAgent(ReinforceAgent):
 
         for i in range(len(G)):
             delta = G[i] - self.w
-            self.w += self.alpha_w * gamma_pow * delta
+            self.w += self.alpha_w * delta
 
             j = 1 if self.actions[i] else 0
             pmf = self.get_pi()
