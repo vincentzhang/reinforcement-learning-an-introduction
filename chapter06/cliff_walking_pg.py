@@ -117,6 +117,7 @@ def trial(num_episodes, agent_generator):
 
             if episode_end:
                 agent.episode_end(reward)
+                #agent.store_history()
                 break
             else:
                 agent.update(next_state, reward)
@@ -159,6 +160,14 @@ class ReinforceAgent(object):
         self.x = np.zeros((self.theta.shape[1], num_actions))
         self.num_actions = num_actions
         self.num_states = num_states
+        ## for visualization
+        self.history_theta = []
+        self.history_grad_ln_pi = []
+        self.history_pmf = []
+        self.history_rewards = []
+        self.history_actions = []
+        self.history_states = []
+        self.history_G = []
 
     def update(self, next_state, reward):
         # callback for performing update based on the next state,reward pair
@@ -239,14 +248,42 @@ class ReinforceAgent(object):
             self.update_x(state)
             pmf = self.get_pi() # 1xA
             grad_ln_pi = self.x[:, j] - np.dot(self.x, pmf[0,:])
+
             update = self.alpha * gamma_pow * G[i] * grad_ln_pi
 
             self.theta += update
             gamma_pow *= self.gamma
 
+            # store the history of theta for visualization later
+            self.history_theta.append(self.theta.copy())
+            self.history_grad_ln_pi.append(grad_ln_pi)
+            self.history_pmf.append(pmf)
+
+        self.history_rewards.append(self.rewards.copy())
+        self.history_actions.append(self.actions.copy())
+        self.history_states.append(self.states.copy())
+        self.history_G.append(G.copy())
+
+        self.store_history()
+
         self.rewards = []
         self.actions = []
         self.states = []
+        # self.history_theta = []
+        # self.history_grad_ln_pi = []
+        # self.history_pmf = []
+        # self.history_rewards = []
+        # self.history_actions = []
+        # self.history_states = []
+
+    def store_history(self):
+        #pass
+        with open('log/history.npz', 'wb') as f:
+            np.savez(f, theta=self.history_theta, grad=self.history_grad_ln_pi, pmf=self.history_pmf,
+                     rewards = self.history_rewards, actions=self.history_actions, states=self.history_states,
+                     G = self.history_G)
+        print("History stored")
+
 
 class ReinforceBaselineAgent(ReinforceAgent):
     def __init__(self, alpha, gamma, alpha_w):
@@ -260,6 +297,9 @@ class ReinforceBaselineAgent(ReinforceAgent):
         self.num_states = num_states
         # w should be state-dependent, 48 states
         self.w = np.zeros((1, self.num_states)) # v(St, w)
+
+    def store_history(self):
+        pass
 
     def episode_end(self, last_reward):
         self.rewards.append(last_reward)
@@ -364,15 +404,17 @@ class QLearningAgent(object):
 def cliffwalk_pg():
     ''' This function runs the REINFORCE algorithm on cliffwalk '''
     # episodes of each run
-    episodes = 100
+    episodes = 20
 
     # perform 50 independent runs
-    runs = 50
+    runs = 1
 
     # settings of the REINFORCE agent
     #alphas = [2**-8, 2**-10, 2**-12, 2**-14, 2**-16, 2**-18, 2**-20, 2**-22]
-    alphas = [2**-20]
+    #alphas = [2**-20]
+    alphas = [2 ** -22]
     hyperparamsearch = False
+    plot = False
 
     for alpha in alphas:
         rewards_rei = np.zeros((runs, episodes))
@@ -396,13 +438,12 @@ def cliffwalk_pg():
         if hyperparamsearch:
             file = open("log/sum_rewards_alpha_{}_rewards_{}.txt".format(alpha, sum_rewards), "w")
             file.write("sum of rewards: {} \n".format(sum_rewards))
-            file.write(
-                'The Min/Max Reward in one episode is {}/{}\n'.format(rewards_rei.min(), rewards_rei.max()))
+            file.write('The Min/Max Reward in one episode is {}/{}\n'.format(rewards_rei.min(), rewards_rei.max()))
             file.write('The Max/Min Steps is {}/{}'.format(steps_rei.max(), steps_rei.min()))
             file.close()
 
     # draw reward curves
-    if not hyperparamsearch:
+    if not hyperparamsearch and plot:
         plt.figure()
         sns.tsplot(data=rewards_rei, color='blue', condition='REINFORCE')
         #plt.plot(rewards_rei.mean(axis=0), label='REINFORCE')
@@ -410,22 +451,25 @@ def cliffwalk_pg():
         plt.ylabel('Sum of rewards during episode')
         #plt.ylim([-100, 0])
         plt.legend()
-        plt.savefig('../images/figure_6_4_pg.png')
+        #plt.savefig('../images/figure_6_4_pg.png')
+        plt.savefig('../images/figure_6_4_pg_tmp.png')
         plt.close()
 
 def cliffwalk_pg_baseline():
     ''' This function runs the REINFORCE-baseline algorithm on cliffwalk '''
     # episodes of each run
-    episodes = 5
+    episodes = 500
 
     # perform 50 independent runs
-    runs = 5
+    runs = 50
+
+    hyperparamsearch = False
 
     # settings of the REINFORCE agent
-    alphas = [2**-10, 2**-12, 2**-14, 2**-16, 2**-18, 2**-20, 2**-22]
-    #alpha = alphas[0]
-    alpha_ws = [2**-4, 2**-5, 2**-6]
-    #alpha_w = 2**-5
+    #alphas = [2**-16, 2**-18, 2**-20, 2**-22]#2**-10, 2**-12, 2**-14,
+    alphas = [2**-20]
+    #alpha_ws = [2**-4, 2**-5, 2**-6] # 0.1/4 = 0.025
+    alpha_ws = [2**-6]
 
     for alpha in alphas:
         for alpha_w in alpha_ws:
@@ -439,20 +483,26 @@ def cliffwalk_pg_baseline():
 
             # stats of rewards, write to a txt file
             sum_rewards = rewards_baseline.sum(axis=1).mean() # this is the sum over 200 episodes, averaged of 50 runs
-            file = open("log/sum_rewards_alpha_{}_alphaw_{}.txt".format(alpha, alpha_w), "w")
-            file.write("sum of rewards: {} \n".format(sum_rewards))
-            file.write('The Min/Max Reward in one episode is {}/{}\n'.format(rewards_baseline.min(), rewards_baseline.max()))
-            file.write('The Max/Min Steps is {}/{}'.format(steps_baseline.max(), steps_baseline.min()))
-            file.close()
+            print("alpha: {}; alpha_w: {}".format(alpha, alpha_w))
+            print("sum of rewards: {}".format(sum_rewards))
+            if hyperparamsearch:
+                file = open("log/baseline_sum_rewards_alpha_{}_alphaw_{}_rewards_{}.txt".format(alpha, alpha_w, sum_rewards), "w")
+                file.write("sum of rewards: {} \n".format(sum_rewards))
+                file.write('The Min/Max Reward in one episode is {}/{}\n'.format(rewards_baseline.min(), rewards_baseline.max()))
+                file.write('The Max/Min Steps is {}/{}'.format(steps_baseline.max(), steps_baseline.min()))
+                file.close()
 
     # draw reward curves
-    #plt.plot(rewards_baseline.mean(axis=0), label='BASELINE')
-    #plt.xlabel('Episodes')
-    #plt.ylabel('Sum of rewards during episode')
-    #plt.ylim([-100, 0])
-    #plt.legend()
-    #plt.savefig('../images/figure_6_4_pg_baseline.png')
-    #plt.close()
+    if not hyperparamsearch:
+        plt.figure()
+        sns.tsplot(data=rewards_baseline, color='blue', condition='BASELINE')
+        #plt.plot(rewards_baseline.mean(axis=0), label='BASELINE')
+        plt.xlabel('Episodes')
+        plt.ylabel('Sum of rewards during episode')
+        #plt.ylim([-100, 0])
+        plt.legend()
+        plt.savefig('../images/figure_6_4_pg_baseline_ep500.png')
+        plt.close()
 
 def cliffwalk_q():
     ''' This function runs Q-learning algorithm on cliffwalk '''
