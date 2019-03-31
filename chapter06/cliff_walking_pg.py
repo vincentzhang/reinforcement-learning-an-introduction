@@ -217,6 +217,48 @@ class ReinforceAgent(object):
 
         return pmf
 
+    def get_pi_0(self):
+        h = np.dot(self.theta, self.x) # theta: 1xSA, self.x: SAxA
+        pmf = softmax(h)
+        # never become deterministic,
+        # guarantees episode finish
+        imin = np.argmin(pmf)
+        epsilon = EPSILON
+        #
+        # print("imin is: ", imin)
+        # print("pmf[imin] is ", pmf[imin])
+        # print("h is", h)
+        # print("pmf[:] is ", pmf[:])
+        #imax = np.argmax(pmf)
+
+        if pmf[0, imin] < epsilon:
+            #pmf[:] = (1 - epsilon)/(self.num_actions-1)
+            # print("epsilone is ", epsilon)
+            # print("pmf[:] is ", pmf[:])
+
+            #set min to epsilon
+            # the other actions follow the original distribution of their values
+            pmf[0, imin] = epsilon
+
+            # renormalize
+            total = pmf.sum()
+            for j in len(pmf.shape[-1]):
+                if j != imin:
+                    pmf[0, j] /= total
+
+            # Another approach, set all probs below epsilon as epsilon,
+            # and set all the others according to their original proportion
+            # if pmf[0, imax] > 1-epsilon:
+            #     pmf[:] = epsilon/(self.num_actions-1)
+            #     pmf[0, imax] = 1-epsilon
+            # else:
+            #     num_actions_smaller_prob = (pmf <= epsilon).sum()
+            #     pmf[pmf <= epsilon] = epsilon/num_actions_smaller_prob
+            #     sum_actions_larger_prob = pmf[pmf > epsilon].sum()
+            #     pmf[pmf > epsilon] = pmf[pmf > epsilon] / sum_actions_larger_prob * (1-epsilon)
+
+        return pmf
+
     def choose_action(self, state, reward):
         if reward is not None:
             self.rewards.append(reward)
@@ -401,6 +443,135 @@ class QLearningAgent(object):
         self.actions = []
         self.state = None
 
+class MCAgent(object):
+    """
+    Monte Carlo Agent that does on-policy every-visit MC control with epsilon-soft policies
+    """
+    def __init__(self, alpha, gamma, num_states=None, num_actions=None):
+
+        self.alpha = alpha
+        self.gamma = gamma
+        self.q_values = np.zeros((WORLD_HEIGHT, WORLD_WIDTH, 4))
+        self.num_actions = num_actions
+        self.num_states = num_states
+
+        self.actions = []
+        self.rewards = []
+        self.state = None
+        self.states = []
+        # count the number to calculate moving average
+        self.returns_counter = np.zeros((WORLD_HEIGHT, WORLD_WIDTH, 4))
+
+    def init_param(self, num_states, num_actions):
+        pass
+
+    def update(self, next_state, reward):
+        pass
+
+    def choose_action(self, state, reward):
+        if reward is not None:
+            self.rewards.append(reward)
+
+        self.state = state
+        self.states.append(state)
+
+        action = choose_action(state, self.q_values)
+        self.actions.append(action) # need to memorize all the actions in this episode
+        return action
+
+    def episode_end(self, last_reward):
+        self.rewards.append(last_reward)
+
+        G = np.zeros(len(self.rewards))
+        G[-1] = self.rewards[-1]
+
+        # a more efficient implementation, adopted in Chapter 5
+        for i in range(2, len(G) + 1):
+            G[-i] = self.gamma * G[-i + 1] + self.rewards[-i]
+
+        gamma_pow = 1
+
+        for i in range(len(G)):
+            action = self.actions[i]
+            state = self.states[i]
+            self.returns_counter[state[0],state[1],action] += 1
+
+            #New = old * (n - 1) / n + newvalue / n
+            n = self.returns_counter[state[0],state[1],action]
+            # update action value
+            self.q_values[state[0],state[1],action] = self.q_values[state[0],state[1],action]*(n -1)/n+G[i] / n
+
+            gamma_pow *= self.gamma
+
+        self.rewards = []
+        self.actions = []
+        self.states = []
+        self.state = None
+
+class ActorCriticAgent(ReinforceAgent):
+    def __init__(self, alpha, gamma, alpha_w):
+        super(ActorCriticAgent, self).__init__(alpha, gamma)
+        self.alpha_w = alpha_w
+        self.gamma_pow = 1
+        self.state = [0,0]
+
+    def init_param(self, num_states, num_actions):
+        self.theta = np.zeros((1, num_states * num_actions))
+        self.x = np.zeros((self.theta.shape[1], num_actions))
+        self.num_actions = num_actions
+        self.num_states = num_states
+        # w should be state-dependent, 48 states
+        self.w = np.zeros((1, self.num_states)) # v(St, w)
+
+    def choose_action(self, state, reward):
+        if reward is not None:
+            # this reward is from the last iteration
+            self.rewards.append(reward)
+            self.state = state
+            self.states.append(state)
+
+        self.update_x(state)
+        action = np.random.choice(ACTIONS, p=self.get_pi()[0, :])
+        self.actions.append(action)
+        return action
+
+    def update(self, next_state, reward):
+        next_state_idx = self.state_to_idx(next_state)
+        state_idx = self.state_to_idx(self.state)
+        delta = reward + self.gamma * self.w[0, next_state_idx] - self.w[0, state_idx]
+
+        self.w[0, state_idx] += self.alpha_w * delta # only update the weight for this state
+
+        j = self.actions[-1] # x has already been updated when choosing the action for self.state
+        pmf = self.get_pi()  # 1xA
+        grad_ln_pi = self.x[:, j] - np.dot(self.x, pmf[0, :])
+        update = self.alpha * self.gamma_pow * delta * grad_ln_pi
+
+        self.theta += update
+        self.gamma_pow *= self.gamma
+
+    def episode_end(self, last_reward):
+        self.rewards.append(last_reward)
+
+        # perform the last update
+        state_idx = self.state_to_idx(self.state)
+        delta = last_reward - self.w[0, state_idx] # v(terminal)=0
+
+        self.w[0, state_idx] += self.alpha_w * delta # only update the weight for this state
+
+        j = self.actions[-1] # x has already been updated when choosing the action for self.state
+        pmf = self.get_pi()  # 1xA
+        grad_ln_pi = self.x[:, j] - np.dot(self.x, pmf[0, :])
+        update = self.alpha * self.gamma_pow * delta * grad_ln_pi
+
+        self.theta += update
+
+        self.rewards = []
+        self.actions = []
+        self.states = []
+        self.gamma_pow = 1
+
+
 def cliffwalk_pg():
     ''' This function runs the REINFORCE algorithm on cliffwalk '''
     # episodes of each run
@@ -504,6 +675,55 @@ def cliffwalk_pg_baseline():
         plt.savefig('../images/figure_6_4_pg_baseline_ep500.png')
         plt.close()
 
+def cliffwalk_pg_ac():
+    ''' This function runs the actor-critic(ac_ algorithm on cliffwalk '''
+    # episodes of each run
+    episodes = 100
+
+    # perform 50 independent runs
+    runs = 50
+
+    hyperparamsearch = False
+
+    # settings of the Actor Critic agent
+    #alphas = [2**-16, 2**-18, 2**-20, 2**-22]#2**-10, 2**-12, 2**-14,
+    alphas = [2**-20]
+    #alpha_ws = [2**-4, 2**-5, 2**-6] # 0.1/4 = 0.025
+    alpha_ws = [2**-6]
+
+    for alpha in alphas:
+        for alpha_w in alpha_ws:
+            rewards_ac = np.zeros((runs, episodes))
+            steps_ac = np.zeros((runs, episodes))
+
+            agent_generator = lambda: ActorCriticAgent(alpha=alpha, gamma=GAMMA, alpha_w=alpha_w)
+
+            for r in tqdm(range(runs)):
+                rewards_ac[r, :], steps_ac[r, :] = trial(episodes, agent_generator)
+
+            # stats of rewards, write to a txt file
+            sum_rewards = rewards_ac.sum(axis=1).mean() # this is the sum over 200 episodes, averaged of 50 runs
+            print("alpha: {}; alpha_w: {}".format(alpha, alpha_w))
+            print("sum of rewards: {}".format(sum_rewards))
+            if hyperparamsearch:
+                file = open("log/ac_sum_rewards_alpha_{}_alphaw_{}_rewards_{}.txt".format(alpha, alpha_w, sum_rewards), "w")
+                file.write("sum of rewards: {} \n".format(sum_rewards))
+                file.write('The Min/Max Reward in one episode is {}/{}\n'.format(rewards_ac.min(), rewards_ac.max()))
+                file.write('The Max/Min Steps is {}/{}'.format(steps_ac.max(), steps_ac.min()))
+                file.close()
+
+    # draw reward curves
+    if not hyperparamsearch:
+        plt.figure()
+        sns.tsplot(data=rewards_ac, color='blue', condition='Actor-Critic')
+        #plt.plot(rewards_baseline.mean(axis=0), label='BASELINE')
+        plt.xlabel('Episodes')
+        plt.ylabel('Sum of rewards during episode')
+        #plt.ylim([-100, 0])
+        plt.legend()
+        plt.savefig('../images/figure_6_4_pg_ac_ep100.png')
+        plt.close()
+
 def cliffwalk_q():
     ''' This function runs Q-learning algorithm on cliffwalk '''
     # episodes of each run
@@ -530,6 +750,32 @@ def cliffwalk_q():
     plt.legend()
 
     plt.savefig('../images/figure_6_4_Q-Learning.png')
+    plt.close()
+
+def cliffwalk_mc():
+    ''' This function runs MC algorithm on cliffwalk '''
+    # episodes of each run
+    episodes = 100
+
+    # perform 50 independent runs
+    runs = 50
+
+    agent_generator = lambda: MCAgent(alpha=ALPHA, gamma=GAMMA)
+
+    rewards_mc_learning = np.zeros((runs, episodes))
+
+    for r in tqdm(range(runs)):
+        rewards_mc_learning[r,:] = trial(episodes, agent_generator)
+
+    # draw reward curves
+    plt.figure()
+    sns.tsplot(data=rewards_mc_learning, color='blue', condition='MC')
+    #plt.plot(rewards_mc_learning.mean(axis=0), label='MC')
+    plt.xlabel('Episodes')
+    plt.ylabel('Sum of rewards during episode')
+    #plt.ylim([-100, 0])
+    plt.legend()
+    plt.savefig('../images/figure_6_4_MC.png')
     plt.close()
 
 def cliffwalk_random():
@@ -734,7 +980,9 @@ def figure_6_6():
 if __name__ == '__main__':
     #figure_6_4()
     #figure_6_6()
-    cliffwalk_pg()
+    #cliffwalk_pg()
+    #cliffwalk_mc()
     #cliffwalk_q()
     #cliffwalk_random()
     #cliffwalk_pg_baseline()
+    cliffwalk_pg_ac()
