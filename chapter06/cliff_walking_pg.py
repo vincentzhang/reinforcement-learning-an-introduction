@@ -704,7 +704,9 @@ def cliffwalk_pg_ac():
     # perform 50 independent runs
     runs = 50
 
-    hyperparamsearch = True
+    hyperparamsearch = False
+    if not hyperparamsearch:
+        np.random.seed(1973)
 
     # settings of the Actor Critic agent
     #alphas = [2**-8, 2**-10, 2**-12, 2**-14]#[2**-16, 2**-18, 2**-20, 2**-22]#2**-10, 2**-12, 2**-14,
@@ -737,14 +739,21 @@ def cliffwalk_pg_ac():
 
     # draw reward curves
     if not hyperparamsearch:
+        #with open('log/rewards_ac.npz', 'wb') as ac_f:
+        #    np.savez(ac_f, ac=rewards_ac)
         plt.figure()
-        sns.tsplot(data=rewards_ac, color='blue', condition='Actor-Critic')
+        sns.tsplot(data=rewards_ac, color='green', condition='Actor-Critic')
+        f = np.load('log/rewards_q_sarsa.npz')
+        rewards_q = f['q']
+        rewards_sarsa = f['sarsa']
+        sns.tsplot(data=rewards_q, color='red', condition='Q-learning')
+        sns.tsplot(data=rewards_sarsa, color='blue', condition='Sarsa')
         #plt.plot(rewards_baseline.mean(axis=0), label='BASELINE')
         plt.xlabel('Episodes')
         plt.ylabel('Sum of rewards during episode')
-        #plt.ylim([-100, 0])
+        plt.ylim([-100, 0])
         plt.legend()
-        plt.savefig('../images/figure_6_4_pg_ac_ep100.png')
+        plt.savefig('../images/figure_6_4_pg_all_ep500.png')
         plt.close()
 
 def cliffwalk_q():
