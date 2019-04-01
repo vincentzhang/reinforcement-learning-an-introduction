@@ -253,6 +253,44 @@ def figure_6_6():
     plt.savefig('../images/figure_6_6.png')
     plt.close()
 
+def figure_6_q_sarsa():
+    np.random.seed(1973)
+
+    # episodes of each run
+    episodes = 500
+
+    # perform 50 independent runs
+    runs = 50
+
+    rewards_sarsa = np.zeros((runs, episodes))
+    rewards_q_learning = np.zeros((runs, episodes))
+    for r in tqdm(range(runs)):
+        q_sarsa = np.zeros((WORLD_HEIGHT, WORLD_WIDTH, 4))
+        q_q_learning = np.copy(q_sarsa)
+        for i in range(0, episodes):
+            # cut off the value by -100 to draw the figure more elegantly
+            # rewards_sarsa[i] += max(sarsa(q_sarsa), -100)
+            # rewards_q_learning[i] += max(q_learning(q_q_learning), -100)
+            rewards_sarsa[r, i] = sarsa(q_sarsa)
+            rewards_q_learning[r, i] = q_learning(q_q_learning)
+
+    # store the rewards into npz array
+    with open('log/rewards_q_sarsa.npz', 'wb') as f:
+        np.savez(f, q=rewards_q_learning, sarsa=rewards_sarsa)
+
+    # averaging over independent runs
+    # draw reward curves
+    plt.plot(rewards_sarsa.mean(axis=0), label='Sarsa')
+    plt.plot(rewards_q_learning.mean(axis=0), label='Q-Learning')
+    plt.xlabel('Episodes')
+    plt.ylabel('Sum of rewards during episode')
+    plt.ylim([-100, 0])
+    plt.legend()
+
+    plt.savefig('../images/figure_6_q_sarsa.png')
+    plt.close()
+
 if __name__ == '__main__':
-    figure_6_4()
+    #figure_6_4()
     #figure_6_6()
+    figure_6_q_sarsa()
