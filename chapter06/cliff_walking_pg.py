@@ -39,6 +39,9 @@ ACTIONS = [ACTION_UP, ACTION_DOWN, ACTION_LEFT, ACTION_RIGHT]
 START = [3, 0]
 GOAL = [3, 11]
 
+# Whether to debug
+DEBUG = False
+
 
 # choose an action based on epsilon greedy algorithm
 def choose_action(state, q_value):
@@ -319,7 +322,6 @@ class ReinforceAgent(object):
         # self.history_states = []
 
     def store_history(self):
-        #pass
         with open('log/history.npz', 'wb') as f:
             np.savez(f, theta=self.history_theta, grad=self.history_grad_ln_pi, pmf=self.history_pmf,
                      rewards = self.history_rewards, actions=self.history_actions, states=self.history_states,
@@ -514,6 +516,7 @@ class ActorCriticAgent(ReinforceAgent):
         self.alpha_w = alpha_w
         self.gamma_pow = 1
         self.state = [0,0]
+        self.step = 0
 
     def init_param(self, num_states, num_actions):
         self.theta = np.zeros((1, num_states * num_actions))
@@ -540,10 +543,12 @@ class ActorCriticAgent(ReinforceAgent):
         return action
 
     def update(self, next_state, reward):
+        self.step += 1
         next_state_idx = self.state_to_idx(next_state)
         state_idx = self.state_to_idx(self.state)
         delta = reward + self.gamma * self.w[0, next_state_idx] - self.w[0, state_idx]
 
+        tmp = self.w[0, state_idx]
         self.w[0, state_idx] += self.alpha_w * delta # only update the weight for this state
 
         j = self.actions[-1] # x has already been updated when choosing the action for self.state
@@ -553,6 +558,17 @@ class ActorCriticAgent(ReinforceAgent):
 
         self.theta += update
         self.gamma_pow *= self.gamma
+
+        if DEBUG:
+            print("alpha, alpha_w are {}, {}".format(self.alpha, self.alpha_w))
+            print("Delta at step {} is {}".format(self.step, delta))
+            print("w({})={}, w({})={}".format(state_idx, tmp,
+                next_state_idx, self.w[0, next_state_idx]))
+            print("the pi([{}, {}])={}".format(self.state[0], self.state[1], pmf))
+            print("grad_ln_pi is {}".format(grad_ln_pi[grad_ln_pi!=0]))
+            print("update is {}".format(update[update!=0]))
+            print("theta max/min/mean: {}/{}/{}".format(self.theta.max(),
+                self.theta.min(), self.theta.mean() ) )
 
     def episode_end(self, last_reward):
         self.rewards.append(last_reward)
@@ -574,6 +590,7 @@ class ActorCriticAgent(ReinforceAgent):
         self.actions = []
         self.states = []
         self.gamma_pow = 1
+        self.step = 0
 
 
 def cliffwalk_pg():
@@ -687,16 +704,20 @@ def cliffwalk_pg_ac():
     # perform 50 independent runs
     runs = 50
 
-    hyperparamsearch = True
+    hyperparamsearch = False
+    if not hyperparamsearch:
+        np.random.seed(1973)
 
     # settings of the Actor Critic agent
-    alphas = [2**-16, 2**-18, 2**-20, 2**-22]#2**-10, 2**-12, 2**-14,
+    #alphas = [2**-8, 2**-10, 2**-12, 2**-14]#[2**-16, 2**-18, 2**-20, 2**-22]#2**-10, 2**-12, 2**-14,
+    alphas = [2**-5]#[2**-16, 2**-18, 2**-20, 2**-22]#2**-10, 2**-12, 2**-14,
     #alphas = [2**-20]
-    alpha_ws = [2**-1, 2**-2, 2**-3]# [2**-4, 2**-5, 2**-6] # 0.1/4 = 0.025
+    alpha_ws = [2**-1, 2**-2, 2**-3, 2**-4, 2**-5, 2**-6] # 0.1/4 = 0.025
     #alpha_ws = [2**-6]
 
     for alpha in alphas:
         for alpha_w in alpha_ws:
+            print("alpha: {}; alpha_w: {}".format(alpha, alpha_w))
             rewards_ac = np.zeros((runs, episodes))
             steps_ac = np.zeros((runs, episodes))
 
@@ -718,14 +739,21 @@ def cliffwalk_pg_ac():
 
     # draw reward curves
     if not hyperparamsearch:
+        #with open('log/rewards_ac.npz', 'wb') as ac_f:
+        #    np.savez(ac_f, ac=rewards_ac)
         plt.figure()
-        sns.tsplot(data=rewards_ac, color='blue', condition='Actor-Critic')
+        sns.tsplot(data=rewards_ac, color='green', condition='Actor-Critic')
+        f = np.load('log/rewards_q_sarsa.npz')
+        rewards_q = f['q']
+        rewards_sarsa = f['sarsa']
+        sns.tsplot(data=rewards_q, color='red', condition='Q-learning')
+        sns.tsplot(data=rewards_sarsa, color='blue', condition='Sarsa')
         #plt.plot(rewards_baseline.mean(axis=0), label='BASELINE')
         plt.xlabel('Episodes')
         plt.ylabel('Sum of rewards during episode')
-        #plt.ylim([-100, 0])
+        plt.ylim([-100, 0])
         plt.legend()
-        plt.savefig('../images/figure_6_4_pg_ac_ep100.png')
+        plt.savefig('../images/figure_6_4_pg_all_ep500.png')
         plt.close()
 
 def cliffwalk_q():
@@ -888,6 +916,44 @@ def print_optimal_policy(q_value):
     for row in optimal_policy:
         print(row)
 
+def figure_6_q_sarsa():
+    np.random.seed(1973)
+
+    # episodes of each run
+    episodes = 500
+
+    # perform 50 independent runs
+    runs = 50
+
+    rewards_sarsa = np.zeros((runs, episodes))
+    rewards_q_learning = np.zeros((runs, episodes))
+    for r in tqdm(range(runs)):
+        q_sarsa = np.zeros((WORLD_HEIGHT, WORLD_WIDTH, 4))
+        q_q_learning = np.copy(q_sarsa)
+        for i in range(0, episodes):
+            # cut off the value by -100 to draw the figure more elegantly
+            # rewards_sarsa[i] += max(sarsa(q_sarsa), -100)
+            # rewards_q_learning[i] += max(q_learning(q_q_learning), -100)
+            rewards_sarsa[r, i] = sarsa(q_sarsa)
+            rewards_q_learning[r, i] = q_learning(q_q_learning)
+
+    # store the rewards into npz array
+    with open('log/rewards_q_sarsa.npz', 'wb') as f:
+        np.savez(f, q=rewards_q_learning, sarsa=rewards_sarsa)
+
+    # averaging over independent runs
+    # draw reward curves
+    plt.plot(rewards_sarsa.mean(axis=0), label='Sarsa')
+    plt.plot(rewards_q_learning.mean(axis=0), label='Q-Learning')
+    plt.xlabel('Episodes')
+    plt.ylabel('Sum of rewards during episode')
+    plt.ylim([-100, 0])
+    plt.legend()
+
+    plt.savefig('../images/figure_6_q_sarsa.png')
+    plt.close()
+
+
 # Use multiple runs instead of a single run and a sliding window
 # With a single run I failed to present a smooth curve
 # However the optimal policy converges well with a single run
@@ -990,3 +1056,4 @@ if __name__ == '__main__':
     #cliffwalk_random()
     #cliffwalk_pg_baseline()
     cliffwalk_pg_ac()
+    #figure_6_q_sarsa()
