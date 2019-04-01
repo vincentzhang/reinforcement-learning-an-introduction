@@ -548,7 +548,7 @@ class ActorCriticAgent(ReinforceAgent):
         state_idx = self.state_to_idx(self.state)
         delta = reward + self.gamma * self.w[0, next_state_idx] - self.w[0, state_idx]
 
-        tmp = self.w[0, state_idx] 
+        tmp = self.w[0, state_idx]
         self.w[0, state_idx] += self.alpha_w * delta # only update the weight for this state
 
         j = self.actions[-1] # x has already been updated when choosing the action for self.state
