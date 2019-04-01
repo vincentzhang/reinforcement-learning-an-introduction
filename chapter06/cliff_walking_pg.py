@@ -692,7 +692,7 @@ def cliffwalk_pg_ac():
     # settings of the Actor Critic agent
     alphas = [2**-16, 2**-18, 2**-20, 2**-22]#2**-10, 2**-12, 2**-14,
     #alphas = [2**-20]
-    alpha_ws = [2**-4, 2**-5, 2**-6] # 0.1/4 = 0.025
+    alpha_ws = [2**-1, 2**-2, 2**-3]# [2**-4, 2**-5, 2**-6] # 0.1/4 = 0.025
     #alpha_ws = [2**-6]
 
     for alpha in alphas:
