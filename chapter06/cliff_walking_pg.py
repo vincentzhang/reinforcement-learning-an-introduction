@@ -184,7 +184,7 @@ class ReinforceAgent(object):
         for action_idx in range(self.num_actions):
             self.x[state_idx + self.num_states * action_idx, action_idx] = 1.0
 
-    def get_pi(self):
+    def get_pi_bk(self):
         h = np.dot(self.theta, self.x) # theta: 1xSA, self.x: SAxA
         pmf = softmax(h)
         # never become deterministic,
@@ -217,7 +217,7 @@ class ReinforceAgent(object):
 
         return pmf
 
-    def get_pi_0(self):
+    def get_pi(self):
         h = np.dot(self.theta, self.x) # theta: 1xSA, self.x: SAxA
         pmf = softmax(h)
         # never become deterministic,
@@ -238,13 +238,13 @@ class ReinforceAgent(object):
 
             #set min to epsilon
             # the other actions follow the original distribution of their values
+            total = 1.0 - pmf[0, imin]
             pmf[0, imin] = epsilon
 
             # renormalize
-            total = pmf.sum()
-            for j in len(pmf.shape[-1]):
+            for j in range(pmf.shape[-1]):
                 if j != imin:
-                    pmf[0, j] /= total
+                    pmf[0, j] = pmf[0, j] * (1-epsilon) / total
 
             # Another approach, set all probs below epsilon as epsilon,
             # and set all the others according to their original proportion
@@ -531,7 +531,11 @@ class ActorCriticAgent(ReinforceAgent):
             self.states.append(state)
 
         self.update_x(state)
-        action = np.random.choice(ACTIONS, p=self.get_pi()[0, :])
+        try:
+            action = np.random.choice(ACTIONS, p=self.get_pi()[0, :])
+        except ValueError as e:
+            raise(e)
+
         self.actions.append(action)
         return action
 
@@ -683,13 +687,13 @@ def cliffwalk_pg_ac():
     # perform 50 independent runs
     runs = 50
 
-    hyperparamsearch = False
+    hyperparamsearch = True
 
     # settings of the Actor Critic agent
-    #alphas = [2**-16, 2**-18, 2**-20, 2**-22]#2**-10, 2**-12, 2**-14,
-    alphas = [2**-20]
-    #alpha_ws = [2**-4, 2**-5, 2**-6] # 0.1/4 = 0.025
-    alpha_ws = [2**-6]
+    alphas = [2**-16, 2**-18, 2**-20, 2**-22]#2**-10, 2**-12, 2**-14,
+    #alphas = [2**-20]
+    alpha_ws = [2**-4, 2**-5, 2**-6] # 0.1/4 = 0.025
+    #alpha_ws = [2**-6]
 
     for alpha in alphas:
         for alpha_w in alpha_ws:
@@ -706,7 +710,7 @@ def cliffwalk_pg_ac():
             print("alpha: {}; alpha_w: {}".format(alpha, alpha_w))
             print("sum of rewards: {}".format(sum_rewards))
             if hyperparamsearch:
-                file = open("log/ac_sum_rewards_alpha_{}_alphaw_{}_rewards_{}.txt".format(alpha, alpha_w, sum_rewards), "w")
+                file = open("log/ac0_sum_rewards_alpha_{}_alphaw_{}_rewards_{}.txt".format(alpha, alpha_w, sum_rewards), "w")
                 file.write("sum of rewards: {} \n".format(sum_rewards))
                 file.write('The Min/Max Reward in one episode is {}/{}\n'.format(rewards_ac.min(), rewards_ac.max()))
                 file.write('The Max/Min Steps is {}/{}'.format(steps_ac.max(), steps_ac.min()))
