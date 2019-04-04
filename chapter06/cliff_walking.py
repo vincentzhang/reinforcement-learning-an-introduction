@@ -255,6 +255,8 @@ def figure_6_6():
 
 def figure_6_q_sarsa():
     np.random.seed(1973)
+    global EPSILON
+    EPSILON = 0.01
 
     # episodes of each run
     episodes = 500
@@ -275,7 +277,7 @@ def figure_6_q_sarsa():
             rewards_q_learning[r, i] = q_learning(q_q_learning)
 
     # store the rewards into npz array
-    with open('log/rewards_q_sarsa.npz', 'wb') as f:
+    with open('log/rewards_q_sarsa_eps_{}.npz'.format(EPSILON), 'wb') as f:
         np.savez(f, q=rewards_q_learning, sarsa=rewards_sarsa)
 
     # averaging over independent runs
@@ -287,7 +289,7 @@ def figure_6_q_sarsa():
     plt.ylim([-100, 0])
     plt.legend()
 
-    plt.savefig('../images/figure_6_q_sarsa.png')
+    plt.savefig('../images/figure_6_q_sarsa_eps_{}.png'.format(EPSILON))
     plt.close()
 
 if __name__ == '__main__':
