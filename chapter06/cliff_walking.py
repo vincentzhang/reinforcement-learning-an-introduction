@@ -22,7 +22,7 @@ WORLD_WIDTH = 12
 EPSILON = 0.1
 
 # step size
-ALPHA = 0.5
+ALPHA = 0.6
 
 # gamma for Q-Learning and Expected Sarsa
 GAMMA = 1
@@ -254,9 +254,10 @@ def figure_6_6():
     plt.close()
 
 def figure_6_q_sarsa():
+    plot = False
     np.random.seed(1973)
     global EPSILON
-    EPSILON = 0.01
+    EPSILON = 0.1
 
     # episodes of each run
     episodes = 500
@@ -277,20 +278,21 @@ def figure_6_q_sarsa():
             rewards_q_learning[r, i] = q_learning(q_q_learning)
 
     # store the rewards into npz array
-    with open('log/rewards_q_sarsa_eps_{}.npz'.format(EPSILON), 'wb') as f:
+    with open('log/rewards_q_sarsa_eps_{}_alpha_{}.npz'.format(EPSILON, ALPHA), 'wb') as f:
         np.savez(f, q=rewards_q_learning, sarsa=rewards_sarsa)
 
-    # averaging over independent runs
-    # draw reward curves
-    plt.plot(rewards_sarsa.mean(axis=0), label='Sarsa')
-    plt.plot(rewards_q_learning.mean(axis=0), label='Q-Learning')
-    plt.xlabel('Episodes')
-    plt.ylabel('Sum of rewards during episode')
-    plt.ylim([-100, 0])
-    plt.legend()
+    if plot:
+        # averaging over independent runs
+        # draw reward curves
+        plt.plot(rewards_sarsa.mean(axis=0), label='Sarsa')
+        plt.plot(rewards_q_learning.mean(axis=0), label='Q-Learning')
+        plt.xlabel('Episodes')
+        plt.ylabel('Sum of rewards during episode')
+        plt.ylim([-100, 0])
+        plt.legend()
 
-    plt.savefig('../images/figure_6_q_sarsa_eps_{}.png'.format(EPSILON))
-    plt.close()
+        plt.savefig('../images/figure_6_q_sarsa_eps_{}.png'.format(EPSILON))
+        plt.close()
 
 if __name__ == '__main__':
     #figure_6_4()
