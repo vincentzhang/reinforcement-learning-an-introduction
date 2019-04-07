@@ -106,6 +106,8 @@ def trial(num_episodes, agent_generator):
 
     rewards = np.zeros(num_episodes)
     steps = np.zeros(num_episodes)
+    cutoff = 40000 # cutoff the episode at this number of steps
+    flag_printed = False
 
     for episode_idx in range(num_episodes):
         rewards_sum = 0
@@ -119,8 +121,15 @@ def trial(num_episodes, agent_generator):
             rewards_sum += reward
             num_steps += 1
 
-            if episode_end:
+            if num_steps % 20000 == 0:
+                print("number of steps: {}".format(num_steps))
+            if episode_end or num_steps >= cutoff:
                 agent.episode_end(reward)
+                if not episode_end:
+                    print("Terminated at cutoff {}".format(cutoff))
+                    if not flag_printed: # only print policy once at the first cutoff
+                        agent.print_policy()
+                        flag_printed = True
                 #agent.store_history()
                 break
             else:
@@ -159,6 +168,7 @@ class ReinforceAgent(object):
         self.rewards = []
         self.actions = []
         self.states = []
+        self.step = 0
 
     def init_param(self, num_states, num_actions):
         self.theta = np.zeros((1, num_states * num_actions))
@@ -237,6 +247,7 @@ class ReinforceAgent(object):
         #imax = np.argmax(pmf)
 
         if pmf[0, imin] < epsilon:
+            import pdb;pdb.set_trace()
             #pmf[:] = (1 - epsilon)/(self.num_actions-1)
             # print("epsilone is ", epsilon)
             # print("pmf[:] is ", pmf[:])
@@ -283,26 +294,29 @@ class ReinforceAgent(object):
                 h = np.dot(self.theta, x) # theta: 1xSA, self.x: SAxA
                 pmf = softmax(h)
                 action = np.argmax(pmf)
+                max_prob = pmf[0, action]
                 if action == ACTION_UP:
-                    policy[-1].append('U')
+                    policy[-1].append('U-{:.2f}'.format(max_prob))
                 elif action == ACTION_DOWN:
-                    policy[-1].append('D')
+                    policy[-1].append('D-{:.2f}'.format(max_prob))
                 elif action == ACTION_LEFT:
-                    policy[-1].append('L')
+                    policy[-1].append('L-{:.2f}'.format(max_prob))
                 elif action == ACTION_RIGHT:
-                    policy[-1].append('R')
+                    policy[-1].append('R-{:.2f}'.format(max_prob))
         for row in policy:
             print(row)
 
     def choose_action(self, state, reward):
+        ''' Pick actions based on policy params '''
+        self.step += 1
+        #if self.step
         if reward is not None:
             self.rewards.append(reward)
 
-        # not picking action from Q-values anymore. pick from policy parameters
         self.states.append(state)
         # first update x based on the state
         self.update_x(state)
-        action = np.random.choice(ACTIONS, p=self.get_pi()[0,:])
+        action = np.random.choice(ACTIONS, p=self.get_pi()[0, :])
         self.actions.append(action) # need to memorize all the actions in this episode
         return action
 
@@ -341,11 +355,12 @@ class ReinforceAgent(object):
         self.history_states.append(self.states.copy())
         self.history_G.append(G.copy())
 
-        self.store_history()
+        #self.store_history()
 
         self.rewards = []
         self.actions = []
         self.states = []
+        self.step = 0
         # self.history_theta = []
         # self.history_grad_ln_pi = []
         # self.history_pmf = []
@@ -367,6 +382,8 @@ class ReinforceBaselineAgent(ReinforceAgent):
         self.alpha_w = alpha_w
 
     def init_param(self, num_states, num_actions):
+        """ TODO: need to change the variables into the proper vector shape,
+        for instance, Sx1 instead of 1xS"""
         self.theta = np.zeros((1, num_states * num_actions))
         self.x = np.zeros((self.theta.shape[1], num_actions))
         self.num_actions = num_actions
@@ -413,7 +430,7 @@ class ReinforceBaselineAgent(ReinforceAgent):
 
 class RandomAgent(object):
     '''
-        Random Agent that performs equiprobable
+        Random Agent that performs equiprobable actions
     '''
 
     def __init__(self, alpha, gamma, num_states=None, num_actions=None):
@@ -427,7 +444,7 @@ class RandomAgent(object):
         pass
 
     def update(self, next_state, reward):
-        # callback for performing update based on the next state,reward pair
+        """ callback for performing update based on the next state,reward pair """
         pass
 
     def choose_action(self, state, reward):
@@ -439,6 +456,10 @@ class RandomAgent(object):
     def episode_end(self, last_reward):
         self.actions = []
         self.state = None
+
+    def print_policy(self):
+        """ print the current policy """
+        pass
 
 class QLearningAgent(object):
     """
@@ -481,7 +502,7 @@ class MCAgent(object):
     """
     Monte Carlo Agent that does on-policy every-visit MC control with epsilon-soft policies
     """
-    def __init__(self, alpha, gamma, num_states=None, num_actions=None):
+    def __init__(self, alpha, gamma, first_visit=False, num_states=None, num_actions=None):
 
         self.alpha = alpha
         self.gamma = gamma
@@ -493,6 +514,9 @@ class MCAgent(object):
         self.rewards = []
         self.state = None
         self.states = []
+        #self.states_indices = []
+        self.states_visited = np.zeros(WORLD_HEIGHT*WORLD_WIDTH, dtype=bool)  # state vector with S items
+        self.first_visit = first_visit
         # count the number to calculate moving average
         self.returns_counter = np.zeros((WORLD_HEIGHT, WORLD_WIDTH, 4))
 
@@ -501,6 +525,11 @@ class MCAgent(object):
 
     def update(self, next_state, reward):
         pass
+
+    def state_to_idx(self, state):
+        i, j = state
+        state_idx = i * WORLD_WIDTH + j
+        return state_idx
 
     def choose_action(self, state, reward):
         if reward is not None:
@@ -523,11 +552,22 @@ class MCAgent(object):
         for i in range(2, len(G) + 1):
             G[-i] = self.gamma * G[-i + 1] + self.rewards[-i]
 
-        gamma_pow = 1
+        #gamma_pow = 1
 
         for i in range(len(G)):
             action = self.actions[i]
             state = self.states[i]
+            state_idx = self.state_to_idx(state)
+
+            if self.first_visit:
+                # check if the state visited the first time in this episode
+                if self.states_visited[state_idx]:
+                    # already visited, no update
+                    continue
+                else:
+                    # flag this state as visited
+                    self.states_visited[state_idx] = True
+            # update
             self.returns_counter[state[0],state[1],action] += 1
 
             #New = old * (n - 1) / n + newvalue / n
@@ -535,12 +575,17 @@ class MCAgent(object):
             # update action value
             self.q_values[state[0],state[1],action] = self.q_values[state[0],state[1],action]*(n -1)/n+G[i] / n
 
-            gamma_pow *= self.gamma
+            #gamma_pow *= self.gamma # does not seem to be used
 
         self.rewards = []
         self.actions = []
         self.states = []
         self.state = None
+        self.states_visited = np.zeros(WORLD_HEIGHT * WORLD_WIDTH, dtype=bool)
+
+    def print_policy(self):
+        """ print the current policy """
+        print_optimal_policy(self.q_values)
 
 class ActorCriticAgent(ReinforceAgent):
     def __init__(self, alpha, gamma, alpha_w, entropy_beta=0):
@@ -640,17 +685,23 @@ class ActorCriticAgent(ReinforceAgent):
 def cliffwalk_pg():
     ''' This function runs the REINFORCE algorithm on cliffwalk '''
     # episodes of each run
-    episodes = 100
+    episodes = 500
 
     # perform 50 independent runs
     runs = 50
 
     # settings of the REINFORCE agent
-    #alphas = [2**-8, 2**-10, 2**-12, 2**-14, 2**-16, 2**-18, 2**-20, 2**-22]
+    alphas = [2**-28]#[2**-34, 2**-36]#[2**-20, 2**-22, 2**-24, 2**-26, 2**-28, 2**-30, 2**-32]
     #alphas = [2**-20]
-    alphas = [2 ** -22]
+
     hyperparamsearch = False
     plot = False
+
+    if not hyperparamsearch:
+        np.random.seed(1973)
+
+    global EPSILON
+    EPSILON = 0
 
     for alpha in alphas:
         rewards_rei = np.zeros((runs, episodes))
@@ -658,52 +709,60 @@ def cliffwalk_pg():
         agent_generator = lambda: ReinforceAgent(alpha=alpha, gamma=GAMMA)
 
         for r in tqdm(range(runs)):
-            #q_sarsa = np.zeros((WORLD_HEIGHT, WORLD_WIDTH, 4))
-            #q_q_learning = np.copy(q_sarsa)
-            #for i in range(0, episodes):
-                #rewards_sarsa[r, i] = sarsa(q_sarsa)
-                #rewards_q_learning[r, i] = q_learning(q_q_learning)
-                rewards_rei[r, :], steps_rei[r, :] = trial(episodes, agent_generator)
+            print("alpha: {}".format(alpha))
+            rewards_rei[r, :], steps_rei[r, :] = trial(episodes, agent_generator)
 
         # stats of rewards, write to a txt file
         sum_rewards = rewards_rei.sum(axis=1).mean()  # this is the sum over episodes, averaged of the runs
         print("alpha: {}".format(alpha))
         print("sum of rewards: {}".format(sum_rewards))
         if hyperparamsearch:
-            file = open("log/sum_rewards_alpha_{}_rewards_{}.txt".format(alpha, sum_rewards), "w")
-            file.write("sum of rewards: {} \n".format(sum_rewards))
-            file.write('The Min/Max Reward in one episode is {}/{}\n'.format(rewards_rei.min(), rewards_rei.max()))
-            file.write('The Max/Min Steps is {}/{}'.format(steps_rei.max(), steps_rei.min()))
+            file = open("log/rei_sum_rewards_alpha_{}_rewards_{}.txt".format(alpha, sum_rewards), "w")
+            file.write("sum of rewards mean: {} \n".format(sum_rewards))
+            file.write('sum of rewards std: {} \n'.format(rewards_rei.sum(axis=1).std()))
+            file.write('The Min/Max/Mean Reward in one episode is {}/{}/{}\n'.format(rewards_rei.min(), rewards_rei.max(), rewards_rei.mean()))
+            file.write('The Max/Min/Mean Steps is {}/{}/{}'.format(steps_rei.max(), steps_rei.min(), steps_rei.mean()))
             file.close()
+        else:
+            # save the result
+            with open('log/rewards_rei_alpha_{}_ep{}.npz'.format(alpha, episodes), 'wb') as data_f:
+                np.savez(data_f, rewards=rewards_rei, steps=steps_rei)
 
-    # draw reward curves
-    if not hyperparamsearch and plot:
-        plt.figure()
-        sns.tsplot(data=rewards_rei, color='blue', condition='REINFORCE')
-        #plt.plot(rewards_rei.mean(axis=0), label='REINFORCE')
-        plt.xlabel('Episodes')
-        plt.ylabel('Sum of rewards during episode')
-        #plt.ylim([-100, 0])
-        plt.legend()
-        #plt.savefig('../images/figure_6_4_pg.png')
-        plt.savefig('../images/figure_6_4_pg_tmp.png')
-        plt.close()
+            if plot:
+                # draw reward curves
+                plt.figure()
+                sns.tsplot(data=rewards_rei, color='blue', condition='REINFORCE')
+                #plt.plot(rewards_rei.mean(axis=0), label='REINFORCE')
+                plt.xlabel('Episodes')
+                plt.ylabel('Sum of rewards during episode')
+                #plt.ylim([-100, 0])
+                plt.legend()
+                #plt.savefig('../images/figure_6_4_pg.png')
+                plt.savefig('../images/figure_6_rei.png')
+                plt.close()
 
 def cliffwalk_pg_baseline():
     ''' This function runs the REINFORCE-baseline algorithm on cliffwalk '''
     # episodes of each run
-    episodes = 500
+    episodes = 100
 
     # perform 50 independent runs
     runs = 50
 
-    hyperparamsearch = False
+    hyperparamsearch = True
+    plot = False
+
+    if not hyperparamsearch:
+        np.random.seed(1973)
 
     # settings of the REINFORCE agent
-    #alphas = [2**-16, 2**-18, 2**-20, 2**-22]#2**-10, 2**-12, 2**-14,
-    alphas = [2**-20]
-    #alpha_ws = [2**-4, 2**-5, 2**-6] # 0.1/4 = 0.025
-    alpha_ws = [2**-6]
+    alphas = [2**-16, 2**-18] #[2**-20, 2**-22]#2**-10, 2**-12, 2**-14,
+    #alphas = [2**-20]
+    alpha_ws = [2**-2] # 0.1/4 = 0.025
+    #alpha_ws = [2**-6]
+
+    global EPSILON
+    EPSILON = 0
 
     for alpha in alphas:
         for alpha_w in alpha_ws:
@@ -713,30 +772,36 @@ def cliffwalk_pg_baseline():
             agent_generator = lambda: ReinforceBaselineAgent(alpha=alpha, gamma=GAMMA, alpha_w=alpha_w)
 
             for r in tqdm(range(runs)):
+                print("alpha: {}; alpha_w: {}".format(alpha, alpha_w))
                 rewards_baseline[r, :], steps_baseline[r, :] = trial(episodes, agent_generator)
 
             # stats of rewards, write to a txt file
             sum_rewards = rewards_baseline.sum(axis=1).mean() # this is the sum over 200 episodes, averaged of 50 runs
             print("alpha: {}; alpha_w: {}".format(alpha, alpha_w))
             print("sum of rewards: {}".format(sum_rewards))
+            #import pdb; pdb.set_trace()
             if hyperparamsearch:
-                file = open("log/baseline_sum_rewards_alpha_{}_alphaw_{}_rewards_{}.txt".format(alpha, alpha_w, sum_rewards), "w")
-                file.write("sum of rewards: {} \n".format(sum_rewards))
-                file.write('The Min/Max Reward in one episode is {}/{}\n'.format(rewards_baseline.min(), rewards_baseline.max()))
-                file.write('The Max/Min Steps is {}/{}'.format(steps_baseline.max(), steps_baseline.min()))
+                file = open("log/baseline_sum_rewards_alpha_{}_alphaw_{}_ep_{}_rewards_{}.txt".format(alpha, alpha_w, episodes, sum_rewards), "w")
+                file.write("sum of rewards mean: {} \n".format(sum_rewards))
+                file.write('sum of rewards std: {} \n'.format(rewards_baseline.sum(axis=1).std()))
+                file.write(
+                    'The Min/Max/Mean Reward in one episode is {}/{}/{}\n'.format(rewards_baseline.min(), rewards_baseline.max(),
+                                                                                  rewards_baseline.mean()))
+                file.write('The Max/Min/Mean Steps is {}/{}/{}'.format(steps_baseline.max(), steps_baseline.min(), steps_baseline.mean()))
                 file.close()
-
-    # draw reward curves
-    if not hyperparamsearch:
-        plt.figure()
-        sns.tsplot(data=rewards_baseline, color='blue', condition='BASELINE')
-        #plt.plot(rewards_baseline.mean(axis=0), label='BASELINE')
-        plt.xlabel('Episodes')
-        plt.ylabel('Sum of rewards during episode')
-        #plt.ylim([-100, 0])
-        plt.legend()
-        plt.savefig('../images/figure_6_4_pg_baseline_ep500.png')
-        plt.close()
+            else:
+                if plot:
+                    # draw reward curves
+                    plt.figure()
+                    sns.tsplot(data=rewards_baseline, color='blue', condition='BASELINE')
+                    #plt.plot(rewards_baseline.mean(axis=0), label='BASELINE')
+                    plt.xlabel('Episodes')
+                    plt.ylabel('Sum of rewards during episode')
+                    #plt.ylim([-100, 0])
+                    plt.legend()
+                    #plt.savefig('../images/figure_6_4_pg_baseline_ep500.png')
+                    plt.savefig('../images/figure_6_rei_baseline_alpha_{}_alphaw_{}_ep{}.png'.format(alpha, alpha_w, episodes))
+                    plt.close()
 
 def cliffwalk_pg_ac():
     ''' This function runs the actor-critic(ac_ algorithm on cliffwalk '''
@@ -1136,56 +1201,152 @@ def cliffwalk_mc():
     # perform 50 independent runs
     runs = 50
 
+    plot = True
+
+    np.random.seed(1973)
+
     agent_generator = lambda: MCAgent(alpha=ALPHA, gamma=GAMMA)
 
     rewards_mc_learning = np.zeros((runs, episodes))
+    steps_mc_learning = np.zeros((runs, episodes))
 
     for r in tqdm(range(runs)):
-        rewards_mc_learning[r,:] = trial(episodes, agent_generator)
+        rewards_mc_learning[r,:], steps_mc_learning[r, :] = trial(episodes, agent_generator)
 
-    # draw reward curves
-    plt.figure()
-    sns.tsplot(data=rewards_mc_learning, color='blue', condition='MC')
-    #plt.plot(rewards_mc_learning.mean(axis=0), label='MC')
-    plt.xlabel('Episodes')
-    plt.ylabel('Sum of rewards during episode')
-    #plt.ylim([-100, 0])
-    plt.legend()
-    plt.savefig('../images/figure_6_4_MC.png')
-    plt.close()
+    # summarize rewards distribution and plot
+    sum_rewards = rewards_mc_learning.sum(axis=1).mean()  # this is the sum over episodes, averaged of the runs
+    print("sum of rewards mean: {}".format(sum_rewards))
+    print('The Minimum Rewards/Steps is {}/{}'.format(rewards_mc_learning.min(), steps_mc_learning.min()))
+    print('The Maximum Rewards/Steps is {}/{}'.format(rewards_mc_learning.max(), steps_mc_learning.max()))
+
+    # write the result to file
+    file = open("log/mc_sum_rewards_ep{}_rewards_{}.txt".format(episodes, sum_rewards), "w")
+    file.write("sum of rewards mean: {} \n".format(sum_rewards))
+    file.write('sum of rewards std: {} \n'.format(rewards_mc_learning.sum(axis=1).std()))
+    file.write('The Min/Max/Mean Reward in one episode is {}/{}/{}\n'.format(rewards_mc_learning.min(), rewards_mc_learning.max(),
+                                                                             rewards_mc_learning.mean()))
+    file.write('The Max/Min/Mean Steps is {}/{}/{}'.format(steps_mc_learning.max(), steps_mc_learning.min(), steps_mc_learning.mean()))
+    file.close()
+
+    # write the rewards to a file
+    with open('log/rewards_mc_ep{}.npz'.format(episodes), 'wb') as data_f:
+        np.savez(data_f, mc=rewards_mc_learning, mc_steps=steps_mc_learning)
+
+    if plot:
+        # draw reward curves
+        plt.figure()
+        sns.tsplot(data=rewards_mc_learning, color='blue', condition='MC')
+        #plt.plot(rewards_mc_learning.mean(axis=0), label='MC')
+        plt.xlabel('Episodes')
+        plt.ylabel('Sum of rewards during episode')
+        #plt.ylim([-100, 0])
+        plt.legend()
+        #plt.savefig('../images/figure_6_4_MC.png')
+        plt.savefig('../images/figure_6_MC_ep{}.png'.format(episodes))
+        plt.close()
+
+def cliffwalk_mc_first():
+    ''' This function runs MC algorithm on cliffwalk '''
+    # episodes of each run
+    episodes = 100
+
+    # perform 50 independent runs
+    runs = 50
+
+    plot = True
+
+    np.random.seed(1973)
+
+    agent_generator = lambda: MCAgent(alpha=ALPHA, gamma=GAMMA, first_visit=True)
+
+    rewards_mc_learning = np.zeros((runs, episodes))
+    steps_mc_learning = np.zeros((runs, episodes))
+
+    for r in tqdm(range(runs)):
+        rewards_mc_learning[r,:], steps_mc_learning[r, :] = trial(episodes, agent_generator)
+
+    # summarize rewards distribution and plot
+    sum_rewards = rewards_mc_learning.sum(axis=1).mean()  # this is the sum over episodes, averaged of the runs
+    print("sum of rewards mean: {}".format(sum_rewards))
+    print('The Minimum Rewards/Steps is {}/{}'.format(rewards_mc_learning.min(), steps_mc_learning.min()))
+    print('The Maximum Rewards/Steps is {}/{}'.format(rewards_mc_learning.max(), steps_mc_learning.max()))
+
+    # write the result to file
+    file = open("log/mc_first_sum_rewards_ep{}_rewards_{}.txt".format(episodes, sum_rewards), "w")
+    file.write("sum of rewards mean: {} \n".format(sum_rewards))
+    file.write('sum of rewards std: {} \n'.format(rewards_mc_learning.sum(axis=1).std()))
+    file.write('The Min/Max/Mean Reward in one episode is {}/{}/{}\n'.format(rewards_mc_learning.min(), rewards_mc_learning.max(),
+                                                                             rewards_mc_learning.mean()))
+    file.write('The Max/Min/Mean Steps is {}/{}/{}'.format(steps_mc_learning.max(), steps_mc_learning.min(), steps_mc_learning.mean()))
+    file.close()
+
+    # write the rewards to a file
+    with open('log/rewards_mc_first_ep{}.npz'.format(episodes), 'wb') as data_f:
+        np.savez(data_f, mc=rewards_mc_learning, mc_steps=steps_mc_learning)
+
+    if plot:
+        # draw reward curves
+        plt.figure()
+        sns.tsplot(data=rewards_mc_learning, color='blue', condition='MC first-visit')
+        #plt.plot(rewards_mc_learning.mean(axis=0), label='MC')
+        plt.xlabel('Episodes')
+        plt.ylabel('Sum of rewards during episode')
+        #plt.ylim([-100, 0])
+        plt.legend()
+        #plt.savefig('../images/figure_6_4_MC.png')
+        plt.savefig('../images/figure_6_MC_first_ep{}.png'.format(episodes))
+        plt.close()
 
 def cliffwalk_random():
     ''' This function runs Q-learning algorithm on cliffwalk '''
     # episodes of each run
-    episodes = 5
+    episodes = 100
 
     # perform 50 independent runs
     runs = 50
+
+    plot = True
+
+    np.random.seed(1973)
 
     agent_generator = lambda: RandomAgent(alpha=ALPHA, gamma=GAMMA)
 
     rewards_random = np.zeros((runs, episodes))
     steps_random = np.zeros((runs, episodes))
 
-
     for r in tqdm(range(runs)):
         rewards_random[r,:], steps_random[r, :] = trial(episodes, agent_generator)
 
     # summarize rewards distribution and plot
+    sum_rewards = rewards_random.sum(axis=1).mean()  # this is the sum over episodes, averaged of the runs
+    print("sum of rewards mean: {}".format(sum_rewards))
     print('The Minimum Rewards/Steps is {}/{}'.format(rewards_random.min(), steps_random.min()))
     print('The Maximum Rewards/Steps is {}/{}'.format(rewards_random.max(), steps_random.max()))
 
-    # draw reward curves
-    plt.figure()
-    sns.tsplot(data=rewards_random, color='blue', condition='Random')
-    #plt.plot(rewards_random.mean(axis=0), label='Random')
-    plt.xlabel('Episodes')
-    plt.ylabel('Sum of rewards during episode')
-    #plt.ylim([-100, 0])
-    plt.legend()
+    # write the result to file
+    file = open("log/random_sum_rewards_ep{}_rewards_{}.txt".format(episodes, sum_rewards), "w")
+    file.write("sum of rewards mean: {} \n".format(sum_rewards))
+    file.write('sum of rewards std: {} \n'.format(rewards_random.sum(axis=1).std()))
+    file.write('The Min/Max/Mean Reward in one episode is {}/{}/{}\n'.format(rewards_random.min(), rewards_random.max(),
+                                                                             rewards_random.mean()))
+    file.write('The Max/Min/Mean Steps is {}/{}/{}'.format(steps_random.max(), steps_random.min(), steps_random.mean()))
+    file.close()
 
-    plt.savefig('../images/figure_6_4_Random.png')
-    plt.close()
+    # write the rewards to a file
+    with open('log/rewards_random_ep{}.npz'.format(episodes), 'wb') as random_f:
+        np.savez(random_f, random=rewards_random, random_steps=steps_random)
+
+    if plot:
+        # draw reward curves
+        plt.figure()
+        sns.tsplot(data=rewards_random, color='blue', condition='Random')
+        #plt.plot(rewards_random.mean(axis=0), label='Random')
+        plt.xlabel('Episodes')
+        plt.ylabel('Sum of rewards during episode')
+        #plt.ylim([-100, 0])
+        plt.legend()
+        plt.savefig('../images/figure_6_Random_ep{}.png'.format(episodes))
+        plt.close()
 
 # an episode with Sarsa
 # @q_value: values for state action pair, will be updated
@@ -1236,8 +1397,6 @@ def q_learning(q_value, step_size=ALPHA):
                 q_value[state[0], state[1], action])
         state = next_state
     return rewards
-
-
 
 # print optimal policy
 def print_optimal_policy(q_value):
@@ -1394,11 +1553,12 @@ def figure_6_6():
 if __name__ == '__main__':
     #figure_6_4()
     #figure_6_6()
-    #cliffwalk_pg()
+
     #cliffwalk_mc()
     #cliffwalk_q()
     #cliffwalk_random()
-    #cliffwalk_pg_baseline()
+    #cliffwalk_pg()
+    cliffwalk_pg_baseline()
     #cliffwalk_pg_ac()
     #cliffwalk_pg_ac_test()
     #compare_all()
@@ -1406,4 +1566,4 @@ if __name__ == '__main__':
     #figure_6_q_sarsa()
     #make_figure()
     #compare_ac_ent()
-    compare_ac_ent2()
+    #compare_ac_ent2()
