@@ -1,0 +1,4 @@
+sum of rewards mean: -65434399.64 
+sum of rewards std: 139070635.79426914 
+The Min/Max/Mean Reward in one episode is -4000000.0/-26.0/-654343.9964
+The Max/Min/Mean Steps is 40000.0/26.0/30069.7172

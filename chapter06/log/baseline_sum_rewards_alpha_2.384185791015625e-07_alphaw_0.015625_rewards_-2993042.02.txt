@@ -1,3 +1,0 @@
-sum of rewards: -2993042.02 
-The Min/Max Reward in one episode is -408656.0/-34.0
-The Max/Min Steps is 38104.0/27.0

@@ -744,21 +744,21 @@ def cliffwalk_pg():
 def cliffwalk_pg_baseline():
     ''' This function runs the REINFORCE-baseline algorithm on cliffwalk '''
     # episodes of each run
-    episodes = 100
+    episodes = 500
 
     # perform 50 independent runs
-    runs = 50
+    runs = 1
 
-    hyperparamsearch = True
+    hyperparamsearch = False
     plot = False
 
     if not hyperparamsearch:
         np.random.seed(1973)
 
     # settings of the REINFORCE agent
-    alphas = [2**-16, 2**-18] #[2**-20, 2**-22]#2**-10, 2**-12, 2**-14,
+    alphas = [2**-18]#, 2**-18, 2**-22] #[2**-20, 2**-22]#2**-10, 2**-12, 2**-14, #
     #alphas = [2**-20]
-    alpha_ws = [2**-2] # 0.1/4 = 0.025
+    alpha_ws = [2**-4]#, 2**-5, 2**-6] # 0.1/4 = 0.025 #[]
     #alpha_ws = [2**-6]
 
     global EPSILON
@@ -790,6 +790,10 @@ def cliffwalk_pg_baseline():
                 file.write('The Max/Min/Mean Steps is {}/{}/{}'.format(steps_baseline.max(), steps_baseline.min(), steps_baseline.mean()))
                 file.close()
             else:
+                # save the result
+                #with open('log/rewards_baseline_alpha_{}_alphaw_{}_ep{}.npz'.format(alpha, alpha_w, episodes), 'wb') as data_f:
+                #    np.savez(data_f, rewards=rewards_baseline, steps=steps_baseline)
+
                 if plot:
                     # draw reward curves
                     plt.figure()
@@ -850,7 +854,7 @@ def cliffwalk_pg_ac():
     # draw reward curves
     if not hyperparamsearch:
         #with open('log/rewards_ac.npz', 'wb') as ac_f:
-        #    np.savez(ac_f, ac=rewards_ac)
+        #    np.savez(ac_f, rewards=rewards_ac, steps=steps_ac)
         plt.figure()
         sns.tsplot(data=rewards_ac, color='green', condition='Actor-Critic')
         f = np.load('log/rewards_q_sarsa.npz')
@@ -869,7 +873,7 @@ def cliffwalk_pg_ac():
 def cliffwalk_pg_ac_test():
     ''' This function runs the actor-critic(ac_ algorithm on cliffwalk '''
     # episodes of each run
-    episodes = 500
+    episodes = 1000
 
     # perform 50 independent runs
     runs = 50
@@ -882,9 +886,9 @@ def cliffwalk_pg_ac_test():
 
     # settings of the Actor Critic agent
     #alphas = [2**-8, 2**-10, 2**-12, 2**-14]#[2**-16, 2**-18, 2**-20, 2**-22]#2**-10, 2**-12, 2**-14,
-    alphas = [2**-4]#[2**-6]#[2**-3]#[2**-6]#[2**-16, 2**-18, 2**-20, 2**-22]#2**-10, 2**-12, 2**-14,
+    alphas = [2**-3]#[2**-6]#[2**-3]#[2**-6]#[2**-16, 2**-18, 2**-20, 2**-22]#2**-10, 2**-12, 2**-14,
     #alphas = [2**-20]
-    alpha_ws = [2**-4]#[2**-1]#[2**-2]#[0.5] #[2**-4, 2**-5, 2**-6] # 0.1/4 = 0.025
+    alpha_ws = [2**-2]#[2**-1]#[2**-2]#[0.5] #[2**-4, 2**-5, 2**-6] # 0.1/4 = 0.025
     #alpha_ws = [2**-6]
 
     global EPSILON
@@ -913,7 +917,7 @@ def cliffwalk_pg_ac_test():
             # draw reward curves
             else:
                 with open('log/rewards_ac_eps_{}_alpha_{}_alphaw_{}_ep{}.npz'.format(EPSILON, alpha, alpha_w, episodes), 'wb') as ac_f:
-                    np.savez(ac_f, ac=rewards_ac)
+                    np.savez(ac_f, rewards=rewards_ac, steps=steps_ac)
                 print('The Min/Max Reward in one episode is {}/{}\n'.format(rewards_ac.min(), rewards_ac.max()))
                 print('The Max/Min Steps is {}/{}'.format(steps_ac.max(), steps_ac.min()))
 
@@ -949,16 +953,15 @@ def cliffwalk_pg_ac_test():
                 #plt.savefig('../images/figure_6_4_pg_all_eps_{}_ep500.png'.format(EPSILON))
                 plt.close()
 
-
 def cliffwalk_ac_ent():
     ''' This function runs the actor-critic (with entropy regularization) algorithm on cliffwalk '''
     # episodes of each run
-    episodes = 100
+    episodes = 1000
 
     # perform 50 independent runs
     runs = 50
 
-    hyperparamsearch = True
+    hyperparamsearch = False
     plot = False
 
     if not hyperparamsearch:
@@ -966,12 +969,14 @@ def cliffwalk_ac_ent():
 
     # settings of the Actor Critic agent
     #alphas = [2**-8, 2**-10, 2**-12, 2**-14]#[2**-16, 2**-18, 2**-20, 2**-22]#2**-10, 2**-12, 2**-14,
-    alphas = [2**-4]#, 2**-6, 2**-8]#[2**-16, 2**-18, 2**-20, 2**-22]#2**-10, 2**-12, 2**-14,
+    alphas = [2**-3]#, 2**-6, 2**-8]#[2**-16, 2**-18, 2**-20, 2**-22]#2**-10, 2**-12, 2**-14,
     #alphas = [2**-20]
-    alpha_ws = [2**-4]#, 2**-6] #[2**-4, 2**-5, 2**-6] # 0.1/4 = 0.025
+    alpha_ws = [2**-2]#, 2**-6] #[2**-4, 2**-5, 2**-6] # 0.1/4 = 0.025
     #alpha_ws = [2**-6]
-    betas = [2**-3, 2**-4]
+    betas = [2**-3]
 
+    global EPSILON
+    EPSILON = 0
 
     for alpha in alphas:
         for alpha_w in alpha_ws:
@@ -998,7 +1003,7 @@ def cliffwalk_ac_ent():
                 else:
                     # draw reward curves
                     with open('log/rewards_ac_eps_{}_alpha_{}_alphaw_{}_beta_{}_ep{}.npz'.format(EPSILON, alpha, alpha_w, beta, episodes), 'wb') as ac_f:
-                        np.savez(ac_f, ac=rewards_ac)
+                        np.savez(ac_f, rewards=rewards_ac, steps=steps_ac)
                 if plot:
                     plt.figure()
                     #sns.tsplot(data=rewards_ac, color='green', condition='Actor-Critic')
@@ -1054,115 +1059,7 @@ def make_figure():
         plt.savefig('../images/figure_6_4_pg_all_eps_{}_ep500.png'.format(eps))
         plt.close()
 
-def compare_all():
-    alpha = 0.9
-    f = np.load('log/rewards_q_sarsa_eps_0.1_alpha_{}.npz'.format(alpha))
-    rewards_q = f['q']
-    f.close()
-    #
-    f = np.load('log/rewards_q_sarsa_eps_0.1.npz')
-    rewards_sarsa = f['sarsa']
-    f.close()
-    
-    f = np.load('log/rewards_ac_eps_0_alpha_0.125_alphaw_0.25_ep500.npz')
-    rewards_ac_orig = f['ac']
-    f.close()
-    
-    plt.figure()
-    smoothing_window = 20
-    rewards_ac_orig_smoothed = pd.Series(rewards_ac_orig.mean(axis=0)).rolling(smoothing_window, min_periods=smoothing_window).mean()
-    plt.plot(rewards_ac_orig_smoothed, label='Actor-Critic Original', color='green')
-    rewards_q_smoothed = pd.Series(rewards_q.mean(axis=0)).rolling(smoothing_window,
-                                                                   min_periods=smoothing_window).mean()
-    rewards_sarsa_smoothed = pd.Series(rewards_sarsa.mean(axis=0)).rolling(smoothing_window,
-                                                                           min_periods=smoothing_window).mean()
-    plt.plot(rewards_q_smoothed, label='Q-learning', color='red')
-    plt.plot(rewards_sarsa_smoothed, label='Sarsa', color='blue')
-    plt.xlabel('Episodes')
-    plt.ylabel('Sum of rewards during episode')
-    plt.ylim([-100, 0])
-    plt.yticks(np.arange(-100, 0.01, step=10))
-    plt.legend()
-    plt.gca().spines['right'].set_color('none')
-    plt.gca().spines['top'].set_color('none')
-    plt.savefig('../images/figure_6_all_ep500_q_{}.png'.format(alpha))
-    plt.close()
 
-
-def compare_ac_ent():
-    #f = np.load('log/rewards_ac_eps_0_alpha_0.125_alphaw_0.25_ep500.npz')
-    f = np.load('log/rewards_ac_eps_0_alpha_0.125_alphaw_0.25_ep1000.npz') # last
-    #f = np.load('log/rewards_ac_eps_0_alpha_0.0625_alphaw_0.0625_ep1000.npz')
-    rewards_ac_orig = f['ac']
-    f.close()
-    #f = np.load('log/rewards_ac_eps_0.1.npz')
-    f = np.load('log/rewards_ac_eps_0.1_alpha_0.015625_alphaw_0.5_ep1000.npz')
-    rewards_ac_eps = f['ac']
-    f.close()
-    f = np.load('log/rewards_ac_eps_0.1_alpha_0.0625_alphaw_0.0625_beta_0.125_ep1000.npz')
-    #f = np.load('log/rewards_ac_eps_0.1_alpha_0.0625_alphaw_0.0625_beta_0.125_ep500.npz')
-    #f = np.load('log/rewards_ac_eps_0.1_alpha_0.0625_alphaw_0.0625_beta_0.5_ep500.npz') # best?
-    #f = np.load('log/rewards_ac_eps_0.1_alpha_0.125_alphaw_0.0625_beta_0.0625_ep500.npz') # one of the suboptimal
-    #f = np.load('log/rewards_ac_eps_0.1_alpha_0.0625_alphaw_0.5_beta_0.5_ep500.npz') # early convg
-    rewards_ac_ent = f['ac']
-    f.close()
-
-    plt.figure()
-    smoothing_window = 20
-    rewards_ac_orig_smoothed = pd.Series(rewards_ac_orig.mean(axis=0)).rolling(smoothing_window, min_periods=smoothing_window).mean()
-    plt.plot(rewards_ac_orig_smoothed, label='Actor-Critic Original', color='green')
-    rewards_ac_eps_smoothed = pd.Series(rewards_ac_eps.mean(axis=0)).rolling(smoothing_window, min_periods=smoothing_window).mean()
-    plt.plot(rewards_ac_eps_smoothed, label='Actor-Critic soft eps', color='blue')
-
-    rewards_ac_ent_smoothed = pd.Series(rewards_ac_ent.mean(axis=0)).rolling(smoothing_window, min_periods=smoothing_window).mean()
-    plt.plot(rewards_ac_ent_smoothed, label='Actor-Critic entropy regularization', color='red')
-    plt.xlabel('Episodes')
-    plt.ylabel('Sum of rewards during episode')
-    plt.ylim([-100, 0])
-    plt.yticks(np.arange(-100, 0.01, step=10))
-    plt.legend()
-    plt.gca().spines['right'].set_color('none')
-    plt.gca().spines['top'].set_color('none')
-    plt.savefig('../images/figure_6_all_ac_ep1000_orig.png')
-    plt.close()
-
-
-def compare_ac_ent2():
-    #f = np.load('log/rewards_ac_eps_0_alpha_0.125_alphaw_0.25_ep500.npz')
-    f = np.load('log/rewards_ac_eps_0_alpha_0.125_alphaw_0.25_ep1000.npz') # last
-    rewards_ac_orig = f['ac']
-    f.close()
-    f = np.load('log/rewards_ac_eps_0_alpha_0.0625_alphaw_0.0625_ep1000.npz')
-    #f = np.load('log/rewards_ac_eps_0.1.npz')
-    #f = np.load('log/rewards_ac_eps_0.1_alpha_0.015625_alphaw_0.5_ep1000.npz')
-    rewards_ac_eps = f['ac']
-    f.close()
-    #f = np.load('log/rewards_ac_eps_0.1_alpha_0.0625_alphaw_0.0625_beta_0.125_ep1000.npz')
-    #f = np.load('log/rewards_ac_eps_0.1_alpha_0.0625_alphaw_0.0625_beta_0.125_ep500.npz')
-    #f = np.load('log/rewards_ac_eps_0.1_alpha_0.0625_alphaw_0.0625_beta_0.5_ep500.npz') # best?
-    #f = np.load('log/rewards_ac_eps_0.1_alpha_0.125_alphaw_0.0625_beta_0.0625_ep500.npz') # one of the suboptimal
-    #f = np.load('log/rewards_ac_eps_0.1_alpha_0.0625_alphaw_0.5_beta_0.5_ep500.npz') # early convg
-    #rewards_ac_ent = f['ac']
-    #f.close()
-
-    plt.figure()
-    smoothing_window = 20
-    rewards_ac_orig_smoothed = pd.Series(rewards_ac_orig.mean(axis=0)).rolling(smoothing_window, min_periods=smoothing_window).mean()
-    plt.plot(rewards_ac_orig_smoothed, label='Actor-Critic With Best Interim Performance', color='green')
-    rewards_ac_eps_smoothed = pd.Series(rewards_ac_eps.mean(axis=0)).rolling(smoothing_window, min_periods=smoothing_window).mean()
-    plt.plot(rewards_ac_eps_smoothed, label='Actor-Critic With Sub-Optimal Interm Performance', color='blue')
-
-    #rewards_ac_ent_smoothed = pd.Series(rewards_ac_ent.mean(axis=0)).rolling(smoothing_window, min_periods=smoothing_window).mean()
-    #plt.plot(rewards_ac_ent_smoothed, label='Actor-Critic entropy regularization', color='red')
-    plt.xlabel('Episodes')
-    plt.ylabel('Sum of rewards during episode')
-    plt.ylim([-100, 0])
-    plt.yticks(np.arange(-100, 0.01, step=10))
-    plt.legend()
-    plt.gca().spines['right'].set_color('none')
-    plt.gca().spines['top'].set_color('none')
-    plt.savefig('../images/figure_6_all_ac_ep1000_convergence.png')
-    plt.close()
 
 
 def cliffwalk_q():
@@ -1230,7 +1127,7 @@ def cliffwalk_mc():
 
     # write the rewards to a file
     with open('log/rewards_mc_ep{}.npz'.format(episodes), 'wb') as data_f:
-        np.savez(data_f, mc=rewards_mc_learning, mc_steps=steps_mc_learning)
+        np.savez(data_f, rewards=rewards_mc_learning, steps=steps_mc_learning)
 
     if plot:
         # draw reward curves
@@ -1282,7 +1179,7 @@ def cliffwalk_mc_first():
 
     # write the rewards to a file
     with open('log/rewards_mc_first_ep{}.npz'.format(episodes), 'wb') as data_f:
-        np.savez(data_f, mc=rewards_mc_learning, mc_steps=steps_mc_learning)
+        np.savez(data_f, rewards=rewards_mc_learning, steps=steps_mc_learning)
 
     if plot:
         # draw reward curves
@@ -1334,7 +1231,7 @@ def cliffwalk_random():
 
     # write the rewards to a file
     with open('log/rewards_random_ep{}.npz'.format(episodes), 'wb') as random_f:
-        np.savez(random_f, random=rewards_random, random_steps=steps_random)
+        np.savez(random_f, rewards=rewards_random, steps=steps_random)
 
     if plot:
         # draw reward curves
@@ -1558,12 +1455,12 @@ if __name__ == '__main__':
     #cliffwalk_q()
     #cliffwalk_random()
     #cliffwalk_pg()
-    cliffwalk_pg_baseline()
+    #cliffwalk_pg_baseline()
     #cliffwalk_pg_ac()
-    #cliffwalk_pg_ac_test()
-    #compare_all()
+    cliffwalk_pg_ac_test()
+
     #cliffwalk_ac_ent()
+
     #figure_6_q_sarsa()
     #make_figure()
-    #compare_ac_ent()
     #compare_ac_ent2()
