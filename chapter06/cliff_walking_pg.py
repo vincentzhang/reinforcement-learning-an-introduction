@@ -638,7 +638,9 @@ class ActorCriticAgent(ReinforceAgent):
         pmf = self.get_pi()  # 1xA
         grad_ln_pi = self.x[:, j] - np.dot(self.x, pmf[0, :])
         if self.beta > 0.0:
-            update = self.alpha * (self.gamma_pow * delta * grad_ln_pi - self.beta * np.log(pmf[0, j]))
+            #update = self.alpha * (self.gamma_pow * delta * grad_ln_pi - self.beta * np.log(pmf[0, j]))
+            #update = self.alpha * (self.gamma_pow * (delta - self.beta*np.log(pmf[0, j]) )* grad_ln_pi ) # v2
+            update = self.alpha * (self.gamma_pow * (delta - self.beta * np.log(pmf[0, j]) - self.beta) * grad_ln_pi) # v3
         else:
             update = self.alpha * self.gamma_pow * delta * grad_ln_pi
 
@@ -1003,6 +1005,97 @@ def cliffwalk_ac_ent():
                 else:
                     # draw reward curves
                     with open('log/rewards_ac_eps_{}_alpha_{}_alphaw_{}_beta_{}_ep{}.npz'.format(EPSILON, alpha, alpha_w, beta, episodes), 'wb') as ac_f:
+                        np.savez(ac_f, rewards=rewards_ac, steps=steps_ac)
+                if plot:
+                    plt.figure()
+                    #sns.tsplot(data=rewards_ac, color='green', condition='Actor-Critic')
+                    smoothing_window = 20
+                    rewards_ac_smoothed = pd.Series(rewards_ac.mean(axis=0)).rolling(smoothing_window, min_periods=smoothing_window).mean()
+                    plt.plot(rewards_ac_smoothed, label='Actor-Critic', color='green')
+                    #plt.text(450,rewards_ac_smoothed.at[499],'actor-critic')
+                    f = np.load('log/rewards_q_sarsa_eps_0.1.npz')
+                    rewards_q = f['q']
+                    rewards_sarsa = f['sarsa']
+                    rewards_q_smoothed = pd.Series(rewards_q.mean(axis=0)).rolling(smoothing_window, min_periods=smoothing_window).mean()
+                    rewards_sarsa_smoothed = pd.Series(rewards_sarsa.mean(axis=0)).rolling(smoothing_window, min_periods=smoothing_window).mean()
+                    plt.plot(rewards_q_smoothed, label='Q-learning', color='red')
+                    plt.plot(rewards_sarsa_smoothed, label='Sarsa', color='blue')
+                    #sns.tsplot(data=rewards_q, color='red', condition='Q-learning')
+                    #sns.tsplot(data=rewards_sarsa, color='blue', condition='Sarsa')
+                    plt.xlabel('Episodes')
+                    plt.ylabel('Sum of rewards during episode')
+                    plt.ylim([-100, 0])
+                    plt.yticks(np.arange(-100, 0.01, step=10))
+                    plt.legend()
+                    # remove all the ticks and directly label each bar with respective value
+                    #plt.tick_params(top=False, bottom=True, left=True, right=False, labelleft=True, labelbottom=True)
+                    #plt.box(False)
+                    # Then extract the spines and make them invisible
+                    plt.gca().spines['right'].set_color('none')
+                    plt.gca().spines['top'].set_color('none')
+                    #plt.grid(True)
+                    plt.savefig('../images/figure_6_all_eps_{}_alpha_{}_alphaw_{}_beta_{}_ep500.png'.format(EPSILON, alpha, alpha_w, beta))
+                    #plt.savefig('../images/figure_6_4_pg_ac_eps_{}_ep2000.png'.format(EPSILON))
+                    #plt.savefig('../images/figure_6_4_pg_all_eps_{}_ep500.png'.format(EPSILON))
+                    plt.close()
+
+def cliffwalk_ac_ent_v2():
+    ''' This function runs the actor-critic (with entropy regularization) algorithm on cliffwalk
+
+        This is called v2, which implements the following entropy bonus:
+         the bonus is applied on the estimated reward q(St,At).
+         The formula of the gradient then becomes
+          grad = grad(ln(pi)) * (q(s,a) - beta * ln(pi))
+    '''
+    # episodes of each run
+    episodes = 1000
+
+    # perform 50 independent runs
+    runs = 50
+
+    hyperparamsearch = False
+    plot = False
+
+    if not hyperparamsearch:
+        np.random.seed(1973)
+
+    # settings of the Actor Critic agent
+    #alphas = [2**-8, 2**-10, 2**-12, 2**-14]#[2**-16, 2**-18, 2**-20, 2**-22]#2**-10, 2**-12, 2**-14,
+    alphas = [2**-3]#, 2**-6, 2**-8]#[2**-16, 2**-18, 2**-20, 2**-22]#2**-10, 2**-12, 2**-14,
+    #alphas = [2**-20]
+    alpha_ws = [2**-2]#, 2**-6] #[2**-4, 2**-5, 2**-6] # 0.1/4 = 0.025
+    #alpha_ws = [2**-6]
+    betas = [2**-3]#[2**-1, 2**-2, 2**-3, 2**-4]
+
+    global EPSILON
+    EPSILON = 0
+
+    for alpha in alphas:
+        for alpha_w in alpha_ws:
+            for beta in betas:
+                rewards_ac = np.zeros((runs, episodes))
+                steps_ac = np.zeros((runs, episodes))
+
+                agent_generator = lambda: ActorCriticAgent(alpha=alpha, gamma=GAMMA, alpha_w=alpha_w, entropy_beta=beta)
+                for r in tqdm(range(runs)):
+                    print("alpha: {}; alpha_w: {}; entropy_beta: {}".format(alpha, alpha_w, beta))
+                    rewards_ac[r, :], steps_ac[r, :] = trial(episodes, agent_generator)
+
+                # stats of rewards, write to a txt file
+                sum_rewards = rewards_ac.sum(axis=1).mean() # this is the sum over 200 episodes, averaged of 50 runs
+                print("alpha: {}; alpha_w: {}; entropy_beta: {}".format(alpha, alpha_w, beta))
+                print("sum of rewards: {}".format(sum_rewards))
+                if hyperparamsearch:
+                    #pass
+                    file = open("log/ac_ent_v3_sum_rewards_alpha_{}_alphaw_{}_beta_{}_rewards_{}.txt".format(alpha,
+                        alpha_w, beta, sum_rewards), "w")
+                    file.write("sum of rewards: {} \n".format(sum_rewards))
+                    file.write('The Min/Max Reward in one episode is {}/{}\n'.format(rewards_ac.min(), rewards_ac.max()))
+                    file.write('The Max/Min Steps is {}/{}'.format(steps_ac.max(), steps_ac.min()))
+                    file.close()
+                else:
+                    # draw reward curves
+                    with open('log/rewards_ac_v3_eps_{}_alpha_{}_alphaw_{}_beta_{}_ep{}.npz'.format(EPSILON, alpha, alpha_w, beta, episodes), 'wb') as ac_f:
                         np.savez(ac_f, rewards=rewards_ac, steps=steps_ac)
                 if plot:
                     plt.figure()
@@ -1457,10 +1550,8 @@ if __name__ == '__main__':
     #cliffwalk_pg()
     #cliffwalk_pg_baseline()
     #cliffwalk_pg_ac()
-    cliffwalk_pg_ac_test()
-
+    #cliffwalk_pg_ac_test()
     #cliffwalk_ac_ent()
-
+    cliffwalk_ac_ent_v2()
     #figure_6_q_sarsa()
     #make_figure()
-    #compare_ac_ent2()

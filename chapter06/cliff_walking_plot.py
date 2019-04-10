@@ -102,32 +102,33 @@ def compare_td():
 
 def compare_ac_ent():
     #f = np.load('log/rewards_ac_eps_0_alpha_0.125_alphaw_0.25_ep500.npz')
-    f = np.load('log/rewards_ac_eps_0_alpha_0.125_alphaw_0.25_ep1000.npz') # best interim
-    #f = np.load('log/rewards_ac_eps_0_alpha_0.0625_alphaw_0.0625_ep1000.npz') # best aym, no entropy
+    #f = np.load('log/rewards_ac_eps_0_alpha_0.125_alphaw_0.25_ep1000.npz') # best interim
+    f = np.load('log/rewards_ac_eps_0_alpha_0.0625_alphaw_0.0625_ep1000.npz') # best aym, no entropy
     rewards_ac_orig = f['ac']
     f.close()
     #f = np.load('log/rewards_ac_eps_0.1.npz')
     f = np.load('log/rewards_ac_eps_0.1_alpha_0.015625_alphaw_0.5_ep1000.npz') # soft eps 0.1
     rewards_ac_eps = f['ac']
     f.close()
-    f = np.load('log/rewards_ac_eps_0_alpha_0.125_alphaw_0.25_beta_0.125_ep1000.npz') # entropy regularization
-    #f = np.load('log/rewards_ac_eps_0_alpha_0.0625_alphaw_0.0625_beta_0.125_ep1000.npz')
+    #f = np.load('log/rewards_ac_eps_0_alpha_0.125_alphaw_0.25_beta_0.125_ep1000.npz') # entropy regularization
+    f = np.load('log/rewards_ac_eps_0_alpha_0.0625_alphaw_0.0625_beta_0.125_ep1000.npz')
     #f = np.load('log/rewards_ac_eps_0.1_alpha_0.0625_alphaw_0.0625_beta_0.125_ep500.npz')
     #f = np.load('log/rewards_ac_eps_0.1_alpha_0.0625_alphaw_0.0625_beta_0.5_ep500.npz') # best?
     #f = np.load('log/rewards_ac_eps_0.1_alpha_0.125_alphaw_0.0625_beta_0.0625_ep500.npz') # one of the suboptimal
     #f = np.load('log/rewards_ac_eps_0.1_alpha_0.0625_alphaw_0.5_beta_0.5_ep500.npz') # early convg
-    rewards_ac_ent = f['rewards']
+    #rewards_ac_ent = f['rewards']
+    rewards_ac_ent = f['ac']
     f.close()
 
     plt.figure()
     smoothing_window = 20
     rewards_ac_orig_smoothed = pd.Series(rewards_ac_orig.mean(axis=0)).rolling(smoothing_window, min_periods=smoothing_window).mean()
-    plt.plot(rewards_ac_orig_smoothed, label='Actor-Critic Original', color='green')
+    plt.plot(rewards_ac_orig_smoothed, label='Actor-Critic Original',color='#8DBA43') # green
     rewards_ac_eps_smoothed = pd.Series(rewards_ac_eps.mean(axis=0)).rolling(smoothing_window, min_periods=smoothing_window).mean()
-    plt.plot(rewards_ac_eps_smoothed, label='Actor-Critic Soft eps', color='blue')
-
+    plt.plot(rewards_ac_eps_smoothed, label='Actor-Critic Soft eps',
+            color='#FF8111') #e24a33
     rewards_ac_ent_smoothed = pd.Series(rewards_ac_ent.mean(axis=0)).rolling(smoothing_window, min_periods=smoothing_window).mean()
-    plt.plot(rewards_ac_ent_smoothed, label='Actor-Critic Entropy Regularization', color='red')
+    plt.plot(rewards_ac_ent_smoothed, label='Actor-Critic Entropy Regularization', color='#8479d1')
     plt.xlabel('Episodes')
     plt.ylabel('Sum of rewards during episode')
     plt.ylim([-100, 0])
@@ -135,9 +136,49 @@ def compare_ac_ent():
     plt.legend()
     plt.gca().spines['right'].set_color('none')
     plt.gca().spines['top'].set_color('none')
-    plt.savefig('../images/figure_6_all_ac_ep1000_1.png')
+    plt.savefig('../images/figure_6_all_ac_ep1000_multicolor.png')
     plt.close()
 
+def compare_ac_ent_v2():
+    #f = np.load('log/rewards_ac_eps_0_alpha_0.125_alphaw_0.25_ep500.npz')
+    f = np.load('log/rewards_ac_eps_0_alpha_0.125_alphaw_0.25_ep1000.npz') # best interim
+    #f = np.load('log/rewards_ac_eps_0_alpha_0.0625_alphaw_0.0625_ep1000.npz') # best aym, no entropy
+    #rewards_ac_orig = f['ac']
+    rewards_ac_orig = f['rewards']
+    f.close()
+    #f = np.load('log/rewards_ac_eps_0.1.npz')
+    f = np.load('log/rewards_ac_eps_0.1_alpha_0.015625_alphaw_0.5_ep1000.npz') # soft eps 0.1
+    rewards_ac_eps = f['ac']
+    f.close()
+    #f = np.load('log/rewards_ac_v2_eps_0_alpha_0.125_alphaw_0.25_beta_0.5_ep1000.npz')  # entropy regularization, v2
+    f = np.load('log/rewards_ac_v3_eps_0_alpha_0.125_alphaw_0.25_beta_0.125_ep1000.npz') # entropy regularization, v3
+    #f = np.load('log/rewards_ac_eps_0_alpha_0.0625_alphaw_0.0625_beta_0.125_ep1000.npz')
+    #f = np.load('log/rewards_ac_eps_0.1_alpha_0.0625_alphaw_0.0625_beta_0.125_ep500.npz')
+    #f = np.load('log/rewards_ac_eps_0.1_alpha_0.0625_alphaw_0.0625_beta_0.5_ep500.npz') # best?
+    #f = np.load('log/rewards_ac_eps_0.1_alpha_0.125_alphaw_0.0625_beta_0.0625_ep500.npz') # one of the suboptimal
+    #f = np.load('log/rewards_ac_eps_0.1_alpha_0.0625_alphaw_0.5_beta_0.5_ep500.npz') # early convg
+    rewards_ac_ent = f['rewards']
+    #rewards_ac_ent = f['ac']
+    f.close()
+
+    plt.figure()
+    smoothing_window = 1
+    rewards_ac_orig_smoothed = pd.Series(rewards_ac_orig.mean(axis=0)).rolling(smoothing_window, min_periods=smoothing_window).mean()
+    plt.plot(rewards_ac_orig_smoothed, label='Actor-Critic Original',color='#8DBA43') # green
+    rewards_ac_eps_smoothed = pd.Series(rewards_ac_eps.mean(axis=0)).rolling(smoothing_window, min_periods=smoothing_window).mean()
+    plt.plot(rewards_ac_eps_smoothed, label='Actor-Critic Soft eps',
+            color='#FF8111') #e24a33
+    rewards_ac_ent_smoothed = pd.Series(rewards_ac_ent.mean(axis=0)).rolling(smoothing_window, min_periods=smoothing_window).mean()
+    plt.plot(rewards_ac_ent_smoothed, label='Actor-Critic Entropy Regularization', color='#8479d1')
+    plt.xlabel('Episodes')
+    plt.ylabel('Sum of rewards during episode')
+    plt.ylim([-100, 0])
+    plt.yticks(np.arange(-100, 0.01, step=10))
+    plt.legend()
+    plt.gca().spines['right'].set_color('none')
+    plt.gca().spines['top'].set_color('none')
+    plt.savefig('../images/figure_6_all_ac_ep1000_multicolor.png')
+    plt.close()
 
 def compare_ac_learningcurve():
     #f = np.load('log/rewards_ac_eps_0_alpha_0.125_alphaw_0.25_ep500.npz')
@@ -181,5 +222,6 @@ def compare_ac_learningcurve():
 
 #figure_mc_comparison()
 #compare_ac_ent()
-compare_ac_learningcurve()
+compare_ac_ent_v2()
+#compare_ac_learningcurve()
 #compare_td()
